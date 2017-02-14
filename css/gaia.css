@@ -1,0 +1,3 @@
+.speech_bubble.say .top-left, .speech_bubble.say .top-right, .speech_bubble.say .bottom-left, .speech_bubble.say .bottom-right {
+	background:url(chrome-extension://bciafhajjdohddkpobmdbppiokbhnilp/images/posting/say_sprite.gif);
+}

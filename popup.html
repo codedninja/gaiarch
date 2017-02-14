@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html><head>
+		<title>GaiArch Popup</title>
+		
+		<script src="js/jquery.min.js" type="text/javascript"></script>
+		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.4/jquery-ui.min.js"></script>
+		<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/smoothness/jquery-ui.css" type="text/css" />
+		<link rel="stylesheet" href="css/jquery.jb.shortscroll.css" />
+		
+			<script type="text/javascript" src="js/mousewheel.js"></script>
+			<script type="text/javascript" src="js/jquery.jb.shortscroll.js"></script>
+		<script type="text/javascript">
+			var settings;
+			
+			$(document).ready(function(){
+				$("#noticebox").shortscroll();
+				$("#scrollTest").shortscroll();
+			});
+			
+			// Function first runs when popup opens
+			function init() {
+				chrome.extension.sendRequest({call: 'settings'}, function(response){
+					settings = response.value;
+					loadContent();
+				});
+				chrome.extension.sendRequest({call: 'lastvist'}, function(response){});
+			}
+			
+			// Function to switch through tabs 
+			function slideToPage (page) {
+				if (!$(page).hasClass('active')) {
+					
+					// Reset selected class
+					$.each($('nav ul li'), function(index, value) {
+						$(value).removeClass('selected');
+	
+					});
+					
+					// Add selected class to the link clicked
+					$.each($('nav ul li a'), function(index, value) {
+						if ($(value).attr('href') == page) {
+							$(value).parent().addClass('selected');
+						}
+					});
+					
+					// Long if statement based on which link clicked
+					if(page == "#notices")
+					{
+						// Request notice page
+						$.ajax({
+							url: 'http://www.gaiaonline.com/mobileapp/notices/notices/1.3',
+							crossDomain:true,
+						    async:false,
+						    dataType:'html',
+						    success: function(data) {
+						    	// Find <ul>
+						    	var links = $(data).find('ul');
+
+						    	// Find all <a> and make links clickable from within the popup
+						    	links.find('a').each(function(index, value){
+						    		var link = $(value).attr('href');
+						    		$(value).attr('href', 'javascript:chrome.tabs.create({url:"'+parseMobileURL(link)+'"});');
+						    	});
+
+						    	// Add them to the #noticeList
+						    	$('#noticelist').html(links);
+						    }
+						});
+					}
+					else if(page == "#messages")
+					{
+						// Request the privatemessages page
+						$.ajax({
+							url: 'http://www.gaiaonline.com/mobileapp/privatemessages/list/1.6?folder=inbox&limit=15',
+							crossDomain:true,
+						    async:false,
+						    dataType:'json',
+						    success: function(data) {
+						    	// Reset #messagelist
+						    	$('#messagelist').html('');
+
+						    	// For each PM add it to #messagelist and add bold if new message
+						    	$(data.pmlist).each(function(index, value){
+						    		$('#messagelist').append('<div class=\"message\" id=\"'+index+'\"><img class=\"avatar\" src=\"'+value.from_head+'\"><div class=\"details\"><span class=\"from\"><a href=\"#\">'+value.from+'</a></span><span class=\"subject\">Subject: <a href=\"javascript:chrome.tabs.create({url:\'http://www.gaiaonline.com/profile/privmsg.php?folder=inbox&mode=read&id='+value.id+'\'});\">'+value.subject+'</a></span></div><div class=\"date\">'+value.created+'</div></div>');
+						    		if(value.status == "1")
+						    		{
+						    			$('.message#'+index+' .subject a').css({fontSize:'large',fontWeight:'bold',color:'#DDDFFF'});
+						    		}
+						    	});
+
+						    	// Check if #messageList is empty and if so then make it say you have no messages
+						    	if($('#messagelist').html() == '')
+						    	{
+						    		$('#messagelist').html($('<p>Your inbox is empty</p>').css({textAlign:'center'}));
+						    	}
+						    }
+						});
+					}
+					
+					// Hide all <section>
+					$('section').hide();
+					// Remove all active classes from <section>
+					$('section').removeClass('active');
+					// So only the new tab clicked
+					$(page).show();
+					// Make the tab have an active class
+					$(page).addClass('active');
+				}
+			}
+			
+			// Make all links in #main_nav work
+			$('#main_nav ul li a').live('click', function(e) {
+				e.preventDefault();
+				$(document).delay(15);
+				slideToPage($(this).attr('href'));
+			});
+			
+			// Function called when settings (localStorage) has been loaded
+			function loadContent() {
+				// Show #dash
+				$('#dash').show();
+
+				// Set local varibles
+				var pm_count = settings["messagesCount"],
+				request_count = settings["requestsCount"],
+				notice_count = settings["noticesCount"],
+				announcement_count = settings["announcmentsCount"],
+				gold = settings["gold"],
+				gcash = settings["gcash"],
+				username = settings["name"],
+				avatar = settings["avatar"];
+				
+				// Show avatar, gold, gaiacash, and username
+				$('.gold').html(gold);
+				$('.gcash').html(gcash);
+				$('.username').html(username);
+				$('#useravatar').attr({src:avatar});
+				
+				// If statements to show how many notifications the person has
+				if(pm_count >= 1)
+				{
+					$('.pms').html('<span>'+pm_count+'</span>');
+				}
+				else {
+					$('.pms').html('');
+				}
+				
+				if(request_count >= 1)
+				{
+					$('.requests').html('<span>'+request_count+'</span>');
+				}
+				else {
+					$('.requests').html('');
+				}
+				
+				if(announcement_count >= 1)
+				{
+					$('.announcements').html('<span>'+announcement_count+'</span>');
+				}
+				else {
+					$('.announcements').html('');
+				}
+				
+				if(notice_count >= 1)
+				{
+					$('.notices').html('<span>'+notice_count+'</span>');
+				}
+				else {
+					$('.notices').html('');
+				}
+			}
+			
+			// A regex function to clean up all links from mobile to use on main sites
+			function parseMobileURL(str)
+			{
+				search = new Array(
+				      /http\:\/\/(www\.|)gaiaonline\.com\/mobileapp\/forums\/show\/(.*?)/gi,
+				      /http\:\/\/(www\.|)gaiaonline\.com\/mobileapp\/marketplace\/item\/\?itemid=(.*?)/gi,
+				      /http\:\/\/(www\.|)gaiaonline\.com\/mobileapp\/profiles\/\?userid=(.*?)/gi);
+				
+				replace = new Array(
+				      "http://www.gaiaonline.com/forum/$2",
+				      "http://www.gaiaonline.com/marketplace/itemdetail/$2",
+				      "http://www.gaiaonline.com/profiles/$2/");
+				
+				var test;
+				
+				for (i = 0; i < search.length; i++) {
+				    var stop = false;
+				    while(stop==false)
+				    {
+				    	str = str.replace(search[i], replace[i]);
+				    	test = str.match(search[i]);
+				    	if(test==null) {
+				    		stop = true;
+				    	}
+				    }
+				}
+					
+				return str;
+			}
+		</script>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+			}
+			
+			body {
+				background: #606060;
+				min-width: 402px;
+				color: white;
+			}
+			
+			html {
+				padding-bottom: 30px;
+			}
+			
+			a {
+				text-decoration: none;
+				color: white;
+			}
+			
+			.ui-icon-triangle-1-s {
+			    background-position:-65px -16px;
+			}
+			
+			#scrollTest {
+				height: 350px;
+				width: 400px;
+				margin: 0px auto;
+			}
+			
+			#noticebox {
+				height: 350px;
+				width: 400px;
+				margin: 0px auto;
+			}
+						
+			nav#main_nav {
+				background: white;
+				color: white;
+				font-family: 14px verdana;
+				height: 26px;
+				padding-top: 1px;
+				border-bottom: 1px solid #BBB;
+			}
+			
+			nav#main_nav ul {
+				list-style: none;
+				display: inline;
+				margin: 0 0 0 3px;
+				height: 27px;
+			}
+			
+			nav#main_nav ul li {
+				display: inline;
+				padding: 0;
+			}
+			
+			nav#main_nav a {
+				float: left;
+				background: url(images/popup/nav.png) left top no-repeat;
+				height: 26px;
+				margin: 0;
+				padding:0 0 0 11px;
+				text-decoration: none;
+			}
+			
+			nav#main_nav a span {
+				float: none;
+				display: block;
+				padding: 5px 15px 4px 4px;
+				background: url(images/popup/nav_end.png) right top no-repeat;
+				color: white;
+				margin-top: -1px;
+				margin-left: -1px;
+			}
+			
+			nav#main_nav li.selected a {
+				background: url(images/popup/nav_selected.png) left top no-repeat;			}
+			
+			nav#main_nav li.selected a span {
+				background: url(images/popup/nav_end_selected.png) right top no-repeat;
+			}
+			
+			.message {
+				display: block;
+				height:58px;
+				margin-top: 5px;
+				width: 100%;
+				border-bottom: 1px dashed black;
+			}
+			
+			.message:first-child {
+				margin-top: 0;
+			}
+			
+			.message:last-child {
+				border: none;
+			}
+			
+			#messages .avatar{
+				border: 2px solid black;
+				float: left;
+				margin-left: 5px;
+			}
+			
+			#messages .details {
+				float: left;
+				margin-left: 5px;
+				margin-top: 6px;
+			}
+			
+			#messages .details .from, #messages .details .subject {
+				display: block;
+			}
+			
+			#messages .details .subject {
+				max-width: 260px;
+				max-height: 20px;
+				overflow: hidden
+			}
+			
+			#messages .date {
+				float: right;
+				margin: 15px 5px;
+			}
+			
+			section {
+				display: none;
+			}
+			
+			.active {
+				display: block;
+			}
+			
+			ul.notifications {
+				float: left;
+				list-style: none;
+				width: 144px;
+				text-indent: -20px;
+			}
+			
+			ul.notifications a li span {
+				background: #606060;
+				-webkit-border-radius: 3px;
+				padding: 1px 2px 1px 2px;
+				border: 1px solid black;
+			}
+			
+			ul.notifications li {
+				float: left;
+				height: 50px;
+				padding-top: 20px;
+				padding-left: 70px;
+				width: 0px;
+			}
+			
+			ul.notifications a {
+				color: white;
+			}
+			
+			ul.notifications li.requests {
+				background: url(images/popup/req.png) 10px center no-repeat;
+			}
+			
+			ul.notifications li.announcements {
+				background: url(images/popup/annoucements.png) 10px center no-repeat;
+			}
+			
+			ul.notifications li.notices {
+				background: url(images/popup/notices.png) 10px center no-repeat;
+			}
+			
+			ul.notifications li.pms {
+				background: url(images/popup/message.png) 10px center no-repeat;
+			}
+			
+			#avatar {
+				float: left;
+				width: 64%;
+				text-align: center;
+				margin: 0 auto;
+			}
+			
+			#avatar img {
+				display: block;
+				margin: -10px auto;
+			}
+			
+			#avatar .username {
+				display: block;
+			}
+			
+			#searchbox {
+				width: 83%;
+				margin-left: 4px;
+				float: left;
+			}
+			
+			#searchsubmit {
+				float: left;
+				margin-left: 4px;
+			}
+			
+			#notices {
+				max-height: 350px;
+				width: 100%;
+			}
+			
+			#notices ul {
+				padding-right: 10px;
+				padding-left: 5px;
+				list-style: none;
+			}
+			
+			#notices ul li {
+				border-bottom: 2px groove;
+				padding-top: 2px;
+				padding-bottom: 2px;
+			}
+			
+			#notices li:last-child {
+				border-bottom: none;
+			}
+			
+			.icon {
+              background:transparent url(../images/ic_hd_mygaia_sprite.gif) 0 0 no-repeat;
+              background-position: 0 -250px;
+              height: 16px;
+              width: 12px;
+              padding-right: 5px;
+              margin: 0 6px 0 0;
+            }
+            
+            .icon.profile_completeness {
+              background-position: 0 -33px;
+            }
+            
+            .profile.icon, .profile_comment.icon {
+            	background-position: 0 -32px;
+            }
+            
+            
+            
+            .subscribed_thread.icon, .started_thread.icon, .thread_reply.icon, .topic_moved.icon {
+            	background-position: 0 -48px;
+            }
+            
+            .wishlist_item.icon, .listing_sold.icon {
+            	background-position: 0 -64px;
+            }
+            
+            .friends.icon {
+            	background-position: 0 -80px;
+            }
+            
+            .vote.icon {
+            	background-position: 0 -96px;
+            }
+            
+            .forum_quote.icon {
+            	background-position: 0 -112px;
+            }
+            
+            .announcement.icon {
+            	background-position: 0 -128px;
+            }
+            
+            .journal.icon, .journal_comment.icon {
+            	background-position: 0 -144px;
+            }
+            
+            .birthday.icon {
+            	background-position: 0 -176px;
+            }
+            
+            .arena.icon, .arena_comment.icon {
+            	background-position: 0 -192px;
+            }
+            
+            .guild.icon {
+            	background-position: 0 -160px;
+            }
+            
+            .aquarium_health.icon {
+            	background-position: 0 -208px;
+            }
+			
+			section {
+				padding-top: 5px;
+				margin: 0 auto;
+			}
+			
+			footer {
+				bottom: 0;
+				left: 0;
+				position: absolute;
+				width: 100%;
+				background: #252525;
+				border-top: 1px solid black;
+				height: 17px;
+				font-size: 13px;
+			
+			}
+			
+			footer .left {
+				float: left;
+				padding-left: 3px;
+			}
+			
+			footer .right {
+				float: right;
+				padding-right: 3px;
+			}
+			
+			footer .left .gold {
+				background: url(images/gold_icon.png) no-repeat;
+				padding-left: 16px;
+			}
+			
+			footer .left .gcash {
+				background: url(images/gcash_icon.png) no-repeat;
+				padding-left: 16px;
+			}
+			
+			footer .right a {
+				color: white;
+				padding-left: 10px;
+			}
+			
+			
+		</style>
+	</head>
+	<body onload="init();">
+		<nav id="main_nav">
+			<ul>
+				<li class="selected"><a href="#dash"><span>Dash</span></a></li>
+				<li class=""><a href="#messages"><span>Messages</span></a></li>
+				<li class=""><a href="#notices"><span>Notices</span></a></li>
+				<!--<li class=""><a href="#links"><span>Links</span></a></li>-->
+			</ul>
+		</nav>
+		<section id="dash" style="display: none; ">
+			<ul class="notifications">
+				<a href="#" onclick="javascript:slideToPage('#messages');" alt="Private Messages"><li class="pms"></li></a>
+				<a href="#"><li class="requests"></li></a>
+				<a href="#" onclick="javascript:chrome.tabs.create({url:'http://gaiaonline.com/news/'});"><li class="announcements"></li></a>
+				<a href="#" onclick="javascript:slideToPage('#notices');"><li class="notices"></li></a>
+			</ul>
+			<div id="avatar">
+				<span class="username">Guest</span>
+				<img id="useravatar" src="images/avatar.gif">
+				
+			</div>
+		</section>
+		<section id="messages">
+			<div id="scrollTest">
+				<div id="messagelist">
+					Sorry no messages.
+				</div>
+			</div>
+		</section>
+		<section id="notices">
+			<div id="noticebox" class="mcs_container">
+				<div class="content" id="noticelist">
+					<ul>
+						<li>Sorry but not notices at this time.</li>
+					</ul>
+				</div>
+			</div>
+		</section>
+		<section id="links">
+		</section>
+		<footer>
+			<div class="left">
+				<span class="gold">0</span>
+				<span class="gcash">0</span>
+			</div>
+			<div class="right">
+				<a onclick="javascript:init()" href="#">Refresh</a>
+				<!--<a href="#">Links</a>-->
+				<a onclick="javascript:chrome.tabs.create({url:chrome.extension.getURL('options.html')});" href="#">Options</a>
+				<a href="javascript:chrome.tabs.create({url:'http://www.gaiaonline.com/forum/t.75526263/'});">About</a>
+			</div>
+		</footer>
+	
+</body></html>

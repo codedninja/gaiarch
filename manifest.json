@@ -1,0 +1,29 @@
+{
+   "background": {
+      "page": "Background.html"
+   },
+   "browser_action": {
+      "default_icon": "images/gaiarch24.png",
+      "popup": "popup.html"
+   },
+   "icons": {
+      "16":"gaiarch16.png",
+      "48":"gaiarch48.png",
+      "128":"gaiarch128.png" 
+   },
+   "content_scripts": [ {
+      "js": [ "js/jquery.min.js", "js/gaiarch.js", "js/forum.js" ],
+      "matches": [ "http://*.gaiaonline.com/*" ]
+   } ],
+   "manifest_version": 2,
+   "description": "GaiArch for Google Chrome by Gaiatools.com and Codedninja.com.",
+   "name": "GaiArch",
+   "options_page": "options.html",
+   "permissions": [ 
+      "tabs",
+      "notifications",
+      "unlimitedStorage",
+      "http://*.gaiaonline.com/*"
+   ],
+   "version": "0.0.7.0"
+}

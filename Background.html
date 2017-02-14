@@ -1,0 +1,300 @@
+<html>
+<head>
+<script type="text/javascript" src="js/jquery.min.js"></script>
+<script>
+	// Minimum number to randomly grab userdata
+	var pollIntervalMin = 1000 * 30;  // 30 seconds
+	// Max nuber to randomly grab userdata
+	var pollIntervalMax = 1000 * 90;  // 1 minute to 30 seconds
+	// Pay no mind to this but keep it
+	var requestFailureCount = 0;  // used for exponential backoff
+
+	// Was used for adding new defaults on updates
+	var version = "0.0.7.0";
+	
+	// First function to run when page is opened
+	function init() {
+		// Check if was an update
+		if(localStorage["install"]!='true' || localStorage['version']==null || localStorage['version']!=version)
+		{
+			// Load default emotes from file
+			var emotes = $.ajax({
+				url: "emotes.json",
+				crossDomain:true,
+			    async:false,
+			    dataType:'json'
+			}).responseText;
+			
+			// Set default varibles so Gaiarch can keep track of information
+			var emoticons = localStorage["emoticons"];
+			var messagesNotifications = localStorage["messagesNotifications"];
+			var requestsNotifications = localStorage["requestsNotifications"];
+			var announcementsNotifications = localStorage["announcementsNotifications"];
+			var noticesNotifications = localStorage["noticesNotifications"];
+			var forumQuickEdit = localStorage["forumQuickEdit"];
+			var forumQuickQuote = localStorage["forumQuickQuote"];
+			var forumSmilies = localStorage["forumSmilies"];
+			var styles = localStorage['styles'];
+			var autoFormat = localStorage['autoFormat'];
+			var install = localStorage['install'];
+			var versionnum = localStorage['version'];
+			
+			// Used to add new defaults if they were never set
+			if(emoticons==null) {
+				localStorage.emoticons = emotes;
+			}
+			if(messagesNotifications==null) {
+				localStorage.messagesNotifications = true;
+			}
+			if(requestsNotifications==null) {
+				localStorage.requestsNotifications = true;
+			}
+			if(announcementsNotifications==null) {
+				localStorage.announcementsNotifications = true;
+			}
+			if(noticesNotifications==null) {
+				localStorage.noticesNotifications = true;
+			}
+			if(forumQuickEdit==null) {
+				localStorage.forumQuickEdit = true;
+			}
+			if(forumQuickQuote==null) {
+				localStorage.forumQuickQuote = true;
+			}
+			if(forumSmilies==null) {
+				localStorage.forumSmilies = true;
+			}
+			if(styles==null) {
+				localStorage.styles = '[{"name":"Default","poststyle":"3","beginning":"[center]","header":"","footer":"[align=right][size=8]Shamelessly formatted by GaiArch.[/size][imgright]http://codedninja.com/uploads/gaiarch16.png[/imgright][/align]","ending":"[/center]","default":"true"}]';
+			}
+			if(autoFormat==null) {
+				localStorage.autoFormat = true;
+			}
+			if(install==null) {
+				localStorage.install = true;
+			}
+
+			chrome.tabs.create({url:chrome.extension.getURL('update.html')});
+			
+			localStorage.version = version;
+		}
+		
+		// Set color of counter
+		chrome.browserAction.setBadgeBackgroundColor({color:[0, 0, 205, 255]});
+
+		localStorage["messageCount"] = 0;
+		
+		localStorage["requestCount"] = 0;
+		
+		localStorage["noticeCount"] = 0;
+		
+		localStorage["announcmentCount"] = 0;
+		refreshSub();
+	}
+	
+	// Function to send desktop notifications
+	function sendNotification(title, text){
+
+			// Create a simple text notification:
+			var notification = webkitNotifications.createNotification(
+			  'gaiarch48.png',  // icon url - can be relative
+			  'GaiArch: '+title,  // notification title
+			  text // notification body text
+			);
+
+			// Then show the notification.
+			notification.show();
+			
+			notification.ondisplay = function() {
+				setTimeout(function(){
+	                notification.cancel();
+	            }, 10000);
+	        };
+	}
+	
+	// Check if a num is a number if not then make it a zero
+	function checknum(num) {
+		num = parseInt(num);
+		if(isNaN(num))
+		{
+			return parseInt(0);
+		}
+		else {
+			return parseInt(num);
+		}
+	}
+
+	// Function to call every X amount of seconds to check for notifications
+	function refreshSub() {
+
+		// Default number to show on counter
+		var output = 0;
+
+		// Reset the counter (Makes it not visible)
+		chrome.browserAction.setBadgeText({text:''});
+
+		// Request userdata
+		try { 
+        	var notifyData = JSON.parse($.ajax({
+                url: 'http://www.gaiaonline.com/mobileapp/userdata/1.6',
+          	    crossDomain:true,
+                async:false,
+                dataType:'json'
+        	}).responseText);
+        }
+        catch(e) {
+           	var notifyData = null;
+           	resetLocalStorage();
+        }
+		
+		// If the request returned data then continue
+		if (notifyData!=null)
+		{
+			try {
+				// Check if logged in
+				if(notifyData['status'] == 1) {
+
+					// Make local varibles of data from the request
+					var pm_count = checknum(notifyData.user_notify_pm_count);
+					var request_count = checknum(notifyData.user_mygaia_requests_count);
+					var notice_count = checknum(notifyData.user_mygaia_notice_count);
+					var announcement_count = checknum(notifyData.user_notify_announcement_count);
+					var gold = checknum(notifyData.gold);
+					var gcash = checknum(notifyData.gpass);
+					var avatar = notifyData.user_avatar;
+					var name = notifyData.user_name;
+					
+					// If person wants notifications of this data then notify them
+					if (localStorage["requestsNotifications"]=='true')
+					{
+						output = output + request_count;
+						if(request_count!=localStorage["requestsCount"] && request_count!=0) {
+							sendNotification('New Request(s)', 'You have a new request(s) to check.');
+						}
+					}
+					if (localStorage["noticesNotifications"]=='true')
+					{
+						output = output + notice_count;
+						if(notice_count!=localStorage["noticesCount"] && notice_count!=0) {
+							sendNotification('New Notice(s)','You have a new notice(s).');
+						}
+					}
+					if (localStorage["announcmentsNotifications"]=='true')
+					{
+						output = output + announcement_count;
+						if(announcement_count!=localStorage["announcmentsCount"] && announcement_count!=0) {
+							sendNotification('New Announcement(s)', 'There is a new announcement(s).');
+						}
+					}
+					
+					if (localStorage["messagesNotifications"]=='true')
+					{
+						output = output + pm_count;
+						if(pm_count!=localStorage["messagesCount"] && pm_count!=0) {
+							sendNotification('New Private Message(s)', 'There is a new Private Message(s).');
+						}
+					}
+					
+					// Store all the data in localstorage so Gaiarch can use them for later
+					localStorage["messagesCount"] = pm_count;
+					localStorage["requestsCount"] = request_count;
+					localStorage["noticesCount"] = notice_count;
+					localStorage["announcmentsCount"] = announcement_count;
+					localStorage["gold"] = gold;
+					localStorage["gcash"] = gcash;
+					localStorage["avatar"] = avatar;
+					localStorage["name"] = name;
+				}
+				else {
+					resetLocalStorage();
+				}
+			}
+			catch(e) {
+				console.log('Something went wrong. :(');
+				console.log(e);
+				resetLocalStorage();
+			}
+		}
+		else
+		{
+			output = '!';
+		}
+		
+		// If no output is still 0  then make it empty
+		// Note: if it's empty the counter will not show on the icon
+		if (output==0)
+		{
+			output = '';
+		}
+		
+		// Set the counter new output
+		chrome.browserAction.setBadgeText({text:output.toString()});
+		
+		// Store the output for later use
+		localStorage["total"] = output;
+
+		// Start new random update for userdata
+		scheduleRequest();
+	}
+
+	// Reset localstorage if any errors
+	function resetLocalStorage() {
+		localStorage["messagesCount"] = 0;
+		localStorage["requestsCount"] = 0;
+		localStorage["noticesCount"] = 0;
+		localStorage["announcmentsCount"] = 0;
+		localStorage["gold"] = 0;
+		localStorage["gcash"] = 0;
+		localStorage["avatar"] = 'images/avatar.gif';
+		localStorage["name"] = 'Guest';
+	}
+	
+	// Set timer up to request userdata 
+	function scheduleRequest() {
+		var randomness = Math.random() * 2;
+		var exponent = Math.pow(2, requestFailureCount);
+		var delay = Math.min(randomness * pollIntervalMin * exponent, pollIntervalMax);
+		delay = Math.round(delay);
+		var d=new Date();
+		if(parseInt(localStorage['lastvist'])+2700000>d.valueOf())
+		{
+			
+			window.setTimeout(refreshSub, delay);	
+		}
+		else {
+			window.setTimeout(scheduleRequest, delay);
+		}
+	}
+	
+	// Used for talking from content script to the background script (Should touch this unless you really learn javascript)
+	chrome.extension.onRequest.addListener(function(request, sender, sendResponse) {
+		if(request.call=='settings')
+		{
+			sendResponse({value: localStorage});
+		}
+		else if (request.call=='lastvist')
+		{
+			var d=new Date();
+			localStorage['lastvist'] = d.valueOf();
+		}
+		else if (request.call=='autoFormat')
+		{
+			if(request.key=='gaiarch_postAutoFormat')
+			{
+				localStorage['autoFormat']=request.set;
+			}
+			else if(request.key=='gaiarch_pmAutoFormat')
+			{
+				localStorage['pmAutoFormat']=request.set;
+			}
+			else if(request.key=='gaiarch_commentAutoFormat')
+			{
+				localStorage['commentAutoFormat']=request.set;
+			}
+		}
+	});
+</script>
+</head>
+<body onload="init()">
+</body>
+</html>
